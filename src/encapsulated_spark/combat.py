@@ -52,9 +52,30 @@ def _pick_target(
     weapon: WeaponSpec,
     walls: list[Wall],
     elevation: ElevationMap | None,
+    squads=None,
+    units_by_id=None,
 ) -> Unit | None:
-    """Discipline-aware target selection (delegates to ai.targeting)."""
+    """Discipline-aware target selection.
+
+    If the shooter's squad has a player-set focus_target_id and that enemy is
+    alive, in range, and visible, prefer them. Otherwise delegate to
+    ai.targeting.pick. A dead focus target is cleared.
+    """
     from .ai import targeting
+    if (
+        squads is not None
+        and units_by_id is not None
+        and shooter.squad_id is not None
+    ):
+        sq = squads.get(shooter.squad_id)
+        if sq is not None and sq.focus_target_id is not None:
+            enemy = units_by_id.get(sq.focus_target_id)
+            if enemy is None or not enemy.alive:
+                sq.focus_target_id = None
+            elif targeting._visible(shooter, enemy, weapon.range_, walls, elevation):
+                return enemy
+            # else: focus exists but currently unreachable — fall through
+            # to normal targeting so the shooter still does *something*.
     return targeting.pick(shooter, all_units, weapon.range_, walls, elevation)
 
 
@@ -100,6 +121,8 @@ def resolve(
     trees: list[Tree] | None = None,
     elevation: ElevationMap | None = None,
     weapon: WeaponSpec = DEFAULT_WEAPON,
+    squads=None,
+    units_by_id=None,
 ) -> list[ShotEvent]:
     """Each alive unit, if cooldown elapsed and an enemy is visible & in range, fires."""
     walls = walls or []
@@ -112,7 +135,10 @@ def resolve(
         if shooter.weapon_cooldown > 0.0:
             shooter.weapon_cooldown -= dt
             continue
-        target = _pick_target(shooter, units, weapon, walls, elevation)
+        target = _pick_target(
+            shooter, units, weapon, walls, elevation,
+            squads=squads, units_by_id=units_by_id,
+        )
         if target is None:
             shooter.reaction_cooldown = 0.6 * (1.0 - shooter.discipline) + 0.1
             continue

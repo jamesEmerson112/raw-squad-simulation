@@ -11,7 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import pygame
 
-from encapsulated_spark.input import Controls
+from encapsulated_spark import commands
+from encapsulated_spark.input import Controls, Selector
 from encapsulated_spark.log import EventLog, new_run_path, summarize
 from encapsulated_spark.render import draw_frame, make_window
 from encapsulated_spark.setup_screen import pick_settings
@@ -81,6 +82,28 @@ def _build_sim(args: argparse.Namespace):
     return sim
 
 
+def _apply_pending_command(sim, selector: Selector) -> None:
+    """Drain any pending mouse-issued command and apply it to the sim."""
+    cmd = selector.pending_command
+    if cmd is None:
+        return
+    kind = cmd["kind"]
+    if kind == "select_click":
+        sid = commands.find_squad_at(sim, cmd["pos"])
+        selector.selected_squad_ids = {sid} if sid is not None else set()
+    elif kind == "select_box":
+        selector.selected_squad_ids = commands.squads_in_rect(sim, *cmd["rect"])
+    elif kind == "command" and selector.selected_squad_ids:
+        first_sq = next(iter(selector.selected_squad_ids))
+        team = sim.squads[first_sq].team
+        enemy_id = commands.find_enemy_unit_at(sim, cmd["pos"], team)
+        if enemy_id is not None:
+            commands.apply_focus_fire(sim, selector.selected_squad_ids, enemy_id)
+        else:
+            commands.apply_move(sim, selector.selected_squad_ids, cmd["pos"])
+    selector.pending_command = None
+
+
 def _finalize(sim) -> None:
     summary = summarize(sim)
     sim.log.emit(sim.t, "summary", **summary)
@@ -125,16 +148,20 @@ def main() -> None:
 
     screen = make_window()
     controls = Controls()
+    selector = Selector()
     clock = pygame.time.Clock()
 
     while not controls.quit:
         for event in pygame.event.get():
             controls.handle(event)
+            selector.handle(event)
+
+        _apply_pending_command(sim, selector)
 
         for _ in range(controls.speed):
             sim.step(FIXED_DT)
 
-        draw_frame(screen, sim, controls)
+        draw_frame(screen, sim, controls, selector)
         pygame.display.flip()
         clock.tick(60)
 

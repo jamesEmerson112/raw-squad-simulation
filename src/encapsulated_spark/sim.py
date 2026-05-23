@@ -9,7 +9,13 @@ import pygame
 
 from .ai import morale, steering
 from .combat import DEFAULT_WEAPON, ShotEvent, prune_shots, resolve
-from .hierarchy import Company, Squad, apply_leader_death, member_target
+from .hierarchy import (
+    Company,
+    Squad,
+    apply_leader_death,
+    member_target,
+    squad_centroid,
+)
 from .log import EventLog
 from .terrain import resolve_collisions
 from .units import Unit
@@ -17,6 +23,7 @@ from .world import World
 
 FIXED_DT = 1.0 / 60.0  # sim tick length in seconds
 ENGAGE_HOLD_DIST = DEFAULT_WEAPON.range_ * 0.85  # stop closing once near max range
+FULFILL_RADIUS = 18.0   # squad centroid within this of a commanded point → done
 
 
 @dataclass
@@ -56,6 +63,21 @@ class Sim:
                     squad_id=squad.id, team=squad.team,
                     old_leader=prev_leader, new_leader=squad.leader_id,
                 )
+            # Player command (move) overrides company objective. Auto-clears
+            # when the squad centroid arrives within FULFILL_RADIUS.
+            if squad.commanded_target_pos is not None:
+                squad.goal = squad.commanded_target_pos
+                c = squad_centroid(squad, self.units_by_id)
+                if (
+                    c is not None
+                    and (c - squad.commanded_target_pos).length() < FULFILL_RADIUS
+                ):
+                    self.log.emit(
+                        self.t, "command_fulfilled",
+                        squad=squad.id, team=squad.team,
+                    )
+                    squad.commanded_target_pos = None
+                continue
             # Squad goal = its company's objective (fallback: leader's target_pos)
             company = self.companies.get(squad.company_id)
             if company is not None and company.objective is not None:
@@ -88,6 +110,8 @@ class Sim:
             cover=self.world.cover,
             trees=self.world.trees,
             elevation=self.world.elevation,
+            squads=self.squads,
+            units_by_id=self.units_by_id,
         )
         self.shots.extend(new_shots)
         self.shots = prune_shots(self.shots, self.t)

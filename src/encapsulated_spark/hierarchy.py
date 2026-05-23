@@ -25,6 +25,8 @@ class Squad:
     slot_offsets: dict[int, Vec] = field(default_factory=dict)
     goal: Vec | None = None
     leader_lost: bool = False            # set when initial leader dies
+    commanded_target_pos: Vec | None = None   # player override for goal-seeking
+    focus_target_id: int | None = None        # player-set preferred enemy
 
 
 @dataclass

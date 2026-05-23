@@ -6,7 +6,8 @@ import math
 
 import pygame
 
-from .input import Controls
+from .hierarchy import squad_centroid
+from .input import Controls, Selector
 from .sim import Sim
 from .units import UNIT_RADIUS, Unit
 
@@ -25,6 +26,13 @@ INSPECTOR_BG = (15, 16, 20)
 INSPECTOR_TEXT = WHITE
 INSPECTOR_LINE_H = 18
 INSPECTOR_FONT_SIZE = 18
+
+SELECTION_RING_COLOR = (90, 220, 255)         # cyan
+SELECTION_RING_PAD = 2                        # extra px beyond UNIT_RADIUS
+DRAG_RECT_COLOR = (90, 220, 255)
+COMMAND_LINE_COLOR = (90, 220, 255)
+COMMAND_X_COLOR = (90, 220, 255)
+COMMAND_X_SIZE = 5
 
 
 def make_window() -> pygame.Surface:
@@ -264,16 +272,88 @@ def _draw_inspector(
         screen.blit(surf, (px + 8, py + 6 + i * INSPECTOR_LINE_H))
 
 
-def draw_frame(screen: pygame.Surface, sim: Sim, controls: Controls) -> None:
+def _draw_selection_rings(
+    screen: pygame.Surface, sim: Sim, selector: Selector | None
+) -> None:
+    if selector is None or not selector.selected_squad_ids:
+        return
+    radius = int(UNIT_RADIUS) + SELECTION_RING_PAD
+    for sid in selector.selected_squad_ids:
+        sq = sim.squads.get(sid)
+        if sq is None:
+            continue
+        for mid in sq.member_ids:
+            u = sim.units_by_id.get(mid)
+            if u is None or not u.alive:
+                continue
+            pygame.draw.circle(
+                screen, SELECTION_RING_COLOR,
+                (int(u.pos.x), int(u.pos.y) + HUD_HEIGHT),
+                radius, 1,
+            )
+
+
+def _draw_drag_rect(screen: pygame.Surface, selector: Selector | None) -> None:
+    if selector is None or selector.drag_start is None or selector.drag_current is None:
+        return
+    sx, sy = selector.drag_start
+    cx, cy = selector.drag_current
+    x = min(sx, cx)
+    y = min(sy, cy)
+    w = abs(cx - sx)
+    h = abs(cy - sy)
+    if w < 2 and h < 2:
+        return
+    pygame.draw.rect(screen, DRAG_RECT_COLOR, (x, y, w, h), 1)
+
+
+def _draw_command_overlays(
+    screen: pygame.Surface, sim: Sim, selector: Selector | None
+) -> None:
+    if selector is None or not selector.selected_squad_ids:
+        return
+    for sid in selector.selected_squad_ids:
+        sq = sim.squads.get(sid)
+        if sq is None or sq.commanded_target_pos is None:
+            continue
+        c = squad_centroid(sq, sim.units_by_id)
+        if c is None:
+            continue
+        a = (int(c.x), int(c.y) + HUD_HEIGHT)
+        bx = int(sq.commanded_target_pos.x)
+        by = int(sq.commanded_target_pos.y) + HUD_HEIGHT
+        pygame.draw.line(screen, COMMAND_LINE_COLOR, a, (bx, by), 1)
+        # small X at the destination
+        pygame.draw.line(
+            screen, COMMAND_X_COLOR,
+            (bx - COMMAND_X_SIZE, by - COMMAND_X_SIZE),
+            (bx + COMMAND_X_SIZE, by + COMMAND_X_SIZE), 2,
+        )
+        pygame.draw.line(
+            screen, COMMAND_X_COLOR,
+            (bx - COMMAND_X_SIZE, by + COMMAND_X_SIZE),
+            (bx + COMMAND_X_SIZE, by - COMMAND_X_SIZE), 2,
+        )
+
+
+def draw_frame(
+    screen: pygame.Surface,
+    sim: Sim,
+    controls: Controls,
+    selector: Selector | None = None,
+) -> None:
     screen.fill(BG_COLOR)
     _draw_terrain(screen, sim, y_offset=HUD_HEIGHT)
     _draw_shots(screen, sim, y_offset=HUD_HEIGHT)
+    _draw_selection_rings(screen, sim, selector)
     leader_ids = {sq.leader_id for sq in sim.squads.values()}
     for unit in sim.alive_units():
         _draw_unit(
             screen, unit, y_offset=HUD_HEIGHT, is_leader=unit.id in leader_ids
         )
+    _draw_command_overlays(screen, sim, selector)
     _draw_hud(screen, sim, controls)
+    _draw_drag_rect(screen, selector)
     _draw_end_screen(screen, sim)
     mouse_pos = pygame.mouse.get_pos()
     hovered = _find_hovered_unit(sim, mouse_pos)
