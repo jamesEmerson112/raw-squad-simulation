@@ -19,6 +19,13 @@ BLUE = (80, 130, 230)
 WHITE = (235, 235, 235)
 GREY = (140, 140, 150)
 
+HOVER_RADIUS = 8.0
+HOVER_RING_COLOR = (255, 220, 80)
+INSPECTOR_BG = (15, 16, 20)
+INSPECTOR_TEXT = WHITE
+INSPECTOR_LINE_H = 18
+INSPECTOR_FONT_SIZE = 18
+
 
 def make_window() -> pygame.Surface:
     pygame.init()
@@ -182,6 +189,81 @@ def _draw_terrain(screen: pygame.Surface, sim: Sim, y_offset: int) -> None:
         )
 
 
+def _find_hovered_unit(sim: Sim, mouse_pos: tuple[int, int]) -> Unit | None:
+    mx, my = mouse_pos
+    if my < HUD_HEIGHT:
+        return None
+    wx, wy = mx, my - HUD_HEIGHT
+    best: Unit | None = None
+    best_d2 = HOVER_RADIUS * HOVER_RADIUS
+    for u in sim.alive_units():
+        dx = u.pos.x - wx
+        dy = u.pos.y - wy
+        d2 = dx * dx + dy * dy
+        if d2 <= best_d2:
+            best_d2 = d2
+            best = u
+    return best
+
+
+def _draw_hover_ring(screen: pygame.Surface, unit: Unit) -> None:
+    cx = int(unit.pos.x)
+    cy = int(unit.pos.y) + HUD_HEIGHT
+    pygame.draw.circle(
+        screen, HOVER_RING_COLOR, (cx, cy), int(UNIT_RADIUS) + 4, 2
+    )
+
+
+def _inspector_lines(unit: Unit, sim: Sim) -> list[str]:
+    is_leader = any(sq.leader_id == unit.id for sq in sim.squads.values())
+    leader_tag = "  LEADER" if is_leader else ""
+    squad = unit.squad_id if unit.squad_id is not None else "—"
+    broken_tag = "  BROKEN" if unit.broken else ""
+    target = (
+        f"({unit.target_pos.x:.0f}, {unit.target_pos.y:.0f})"
+        if unit.target_pos is not None else "none"
+    )
+    cover = (
+        f"({unit.cover_waypoint.x:.0f}, {unit.cover_waypoint.y:.0f})"
+        if unit.cover_waypoint is not None else "none"
+    )
+    return [
+        f"ID       #{unit.id}   team={unit.team}   squad={squad}{leader_tag}",
+        f"HP       {unit.hp:5.1f}/100   reload {unit.weapon_cooldown:4.2f}s   "
+        f"react {unit.reaction_cooldown:4.2f}s",
+        f"Disc     {unit.discipline:.2f}   morale {unit.morale:.2f}{broken_tag}",
+        f"Pos      ({unit.pos.x:.0f}, {unit.pos.y:.0f})   "
+        f"heading {unit.heading:.0f}°",
+        f"Target   {target}",
+        f"Cover wp {cover}",
+    ]
+
+
+def _draw_inspector(
+    screen: pygame.Surface, unit: Unit, sim: Sim, mouse_pos: tuple[int, int]
+) -> None:
+    font = pygame.font.SysFont(None, INSPECTOR_FONT_SIZE)
+    lines = _inspector_lines(unit, sim)
+    surfs = [font.render(line, True, INSPECTOR_TEXT) for line in lines]
+    panel_w = max(s.get_width() for s in surfs) + 16
+    panel_h = len(surfs) * INSPECTOR_LINE_H + 12
+
+    mx, my = mouse_pos
+    px = mx + 12
+    py = my + 12
+    if px + panel_w > WINDOW_SIZE[0]:
+        px = mx - panel_w - 12
+    if py + panel_h > WINDOW_SIZE[1]:
+        py = my - panel_h - 12
+    px = max(0, min(WINDOW_SIZE[0] - panel_w, px))
+    py = max(0, min(WINDOW_SIZE[1] - panel_h, py))
+
+    pygame.draw.rect(screen, INSPECTOR_BG, (px, py, panel_w, panel_h))
+    pygame.draw.rect(screen, _team_color(unit.team), (px, py, panel_w, panel_h), 1)
+    for i, surf in enumerate(surfs):
+        screen.blit(surf, (px + 8, py + 6 + i * INSPECTOR_LINE_H))
+
+
 def draw_frame(screen: pygame.Surface, sim: Sim, controls: Controls) -> None:
     screen.fill(BG_COLOR)
     _draw_terrain(screen, sim, y_offset=HUD_HEIGHT)
@@ -193,6 +275,11 @@ def draw_frame(screen: pygame.Surface, sim: Sim, controls: Controls) -> None:
         )
     _draw_hud(screen, sim, controls)
     _draw_end_screen(screen, sim)
+    mouse_pos = pygame.mouse.get_pos()
+    hovered = _find_hovered_unit(sim, mouse_pos)
+    if hovered is not None:
+        _draw_hover_ring(screen, hovered)
+        _draw_inspector(screen, hovered, sim, mouse_pos)
 
 
 def draw_m1_skeleton(screen: pygame.Surface) -> None:
