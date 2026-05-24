@@ -50,12 +50,13 @@ Summary prints to stdout; event log goes to `runs/<timestamp>-<scenario>-seed<N>
 - `regular` — mean ≈ 0.55
 - `veteran` — mean ≈ 0.85
 
-Discipline drives accuracy, reaction time, target selection, morale, cover-seeking, and random actions.
+Discipline drives accuracy, reaction time, target selection, morale, cover-seeking, contact reporting, engagement distance, and random actions.
 
 ## Tests
 
 ```
 .venv/bin/python tests/test_determinism.py
+.venv/bin/python tests/test_squad_freeze.py
 ```
 
 ## Output

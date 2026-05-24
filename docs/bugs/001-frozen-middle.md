@@ -1,9 +1,9 @@
 # Bug #001: Frozen middle
 
-- **Status:** open
+- **Status:** fixed
 - **Filed:** 2026-05-22
 - **Owner:** jamesEmerson112
-- **Plan to fix:** scheduled for the next session
+- **Fixed:** 2026-05-24
 
 ## Symptom
 
@@ -15,8 +15,8 @@ decisive fight. Neither side reaches the capture point.
 ## Reproduction
 
 - **Headless (preferred):**
-  `.venv/bin/python tests/test_squad_freeze.py` — fails with a table of
-  the frozen squads.
+  `.venv/bin/python tests/test_squad_freeze.py` — should pass and writes a
+  centroid timeline for inspection.
 - **Interactive:**
   `.venv/bin/python main.py` → setup screen → `capture_the_hill`,
   seed `1`, red 40 / blue 40, both `regular` profile, enter. Watch both
@@ -74,31 +74,28 @@ Sample rows at t = 16.0 s (mid-freeze):
 {"t":16.0,"squad_id":9,"team":"blue","cx":700.76,"cy":434.87,"alive_members":8}
 ```
 
-## Candidate fixes (to be picked tomorrow)
+## Fix applied
 
-No decision yet — these are the levers to weigh:
+The fix replaced the global hard stop with local, discipline-weighted contact
+behavior:
 
-1. **Drop `ENGAGE_HOLD_DIST`** to ~`range_ × 0.45` (≈ 99 px) so units
+1. **Drop `ENGAGE_HOLD_DIST`** to `range_ × 0.52` (≈ 114 px) so units
    close to higher-accuracy range before halting. Likely the single
    biggest lever.
 2. **Per-unit jitter** (±10–20 px) on the hold distance so the line
    ragged-ifies instead of every unit freezing at the same radius.
-3. **Stagger `comp.objective`** per company (squads pick slots around
+3. **Stagger squad objective offsets** around
    the cap point rather than stacking on its centre) so squads spread
    instead of stacking.
-4. **Allow advancing while reloading** (`weapon_cooldown > 0`) so units
-   keep moving even when their musket isn't ready.
-5. **Discipline-biased hold distance** (low discipline charges in;
+4. **Discipline-biased hold distance** (low discipline charges in;
    high discipline holds the optimal-range line) — interacts nicely
    with the existing discipline-driven AI.
-
-A reasonable starting fix is probably (1) + (2) together, with (3) as a
-follow-up if the line still feels static.
+5. Add squad-level contact reports and small contact-time repositioning so
+   squads adjust under fire instead of parking in place.
 
 ## Artefacts
 
-- `tests/test_squad_freeze.py` — failing regression test (will go green
-  when the fix lands; this is the contract for "done").
+- `tests/test_squad_freeze.py` — passing regression test.
 - `runs/freeze_probe-capture_the_hill-seed1.jsonl` — 1120-line centroid
   timeline used to confirm the freeze and generate the table above.
 - Investigation plan: `~/.claude/plans/i-want-to-build-encapsulated-spark.md`

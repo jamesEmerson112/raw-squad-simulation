@@ -179,6 +179,17 @@ def capture_the_hill(
     point = pygame.math.Vector2(cx, cy)
     for comp in sim.companies.values():
         comp.objective = point
+    for team in ("red", "blue"):
+        squad_ids = sorted(sid for sid, sq in sim.squads.items() if sq.team == team)
+        if not squad_ids:
+            continue
+        team_side = -1.0 if team == "red" else 1.0
+        mid = (len(squad_ids) - 1) / 2
+        for i, sid in enumerate(squad_ids):
+            lateral = (i - mid) * 24.0
+            sim.squads[sid].objective_offset = pygame.math.Vector2(
+                team_side * 18.0, lateral
+            )
     # Add light cover flanking the objective.
     w.cover.append(CoverPatch(x=cx - 160.0, y=cy + 90.0, w=50.0, h=20.0))
     w.cover.append(CoverPatch(x=cx + 110.0, y=cy - 110.0, w=50.0, h=20.0))

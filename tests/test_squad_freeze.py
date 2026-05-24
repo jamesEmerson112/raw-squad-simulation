@@ -4,9 +4,9 @@ Runs `capture_the_hill` headless and samples every squad's centroid every
 half second. Writes the timeline to a JSONL file, then asserts that no
 squad's centroid stays still for 5+ seconds while enemies remain alive.
 
-This test is expected to FAIL on the current sim — the assertion failure
-plus the JSONL log are the diagnostic artefacts we need to characterise
-the freeze before fixing it.
+This is a regression test for the frozen-middle bug. The JSONL log remains
+useful when tuning contact behavior because it shows squad centroid motion
+through the opening fight.
 
 Run:
     .venv/bin/python tests/test_squad_freeze.py

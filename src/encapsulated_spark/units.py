@@ -35,3 +35,11 @@ class Unit:
     broken: bool = False
     # M5: cover-seeking — intermediate waypoint chosen at scenario start
     cover_waypoint: pygame.math.Vector2 | None = None
+
+    # Tactical behavior state. Sim seeds and updates these deterministically.
+    engage_hold_distance: float = 0.0
+    next_report_t: float = 0.0
+    hesitate_until: float = 0.0
+    wander_until: float = 0.0
+    charge_until: float = 0.0
+    wander_offset: pygame.math.Vector2 = field(default_factory=pygame.math.Vector2)
